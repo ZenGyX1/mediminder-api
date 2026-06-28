@@ -31,11 +31,12 @@ $app->add(function ($request, $handler) {
 // 🔗 核心：连接你的 Railway 真实云端数据库
 // ==========================================
 function getDbConnection() {
-    $host = 'junction.proxy.rlwy.net';
-    $port = '44083';
+    // 换成 Railway 的内网通道！
+    $host = 'mysql.railway.internal'; 
+    $port = '3306';                   // 内网端口永远是 3306
     $dbname = 'railway'; 
     $dbuser = 'root';
-    $dbpass = 'xRSkNnnKkCvEjTdkebTrkTgLZDUlDzCd'; // 你的真实密码
+    $dbpass = 'xRSkNnnKkCvEjTdkebTrkTgLZDUlDzCd'; // 密码保持不变
     
     $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
     $db = new PDO($dsn, $dbuser, $dbpass);
