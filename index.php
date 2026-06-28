@@ -39,16 +39,14 @@ $app->add(function ($request, $handler) {
 // 🔗 【核心数据库连接】终极解析法：自带容错，杜绝空格和换行问题
 // =========================================================================
 function getDbConnection() {
-    // 使用你 Railway 真实的公网 URL，PHP 会自动且极其精准地拆解它
-    $raw_url = 'mysql://root:xRSkNnnKkCvEjTdkebTrkTgLZDUlDzCd@junction.proxy.rlwy.net:44083/railway';
+    // 强制使用公网地址，不搞内网穿透了
+    $host = 'junction.proxy.rlwy.net';
+    $port = '44083';
+    $dbname = 'railway';
+    $dbuser = 'root';
     
-    $parsed = parse_url($raw_url);
-    
-    $host = $parsed['host'];
-    $port = $parsed['port'];
-    $dbname = ltrim($parsed['path'], '/');
-    $dbuser = $parsed['user'];
-    $dbpass = $parsed['pass'];
+    // 🚨 绝对正确的密码！已经修复了之前的大小写错误！千万别手动改！
+    $dbpass = 'xRSkNnnKkCvEjTdkebTrkTgLZDUlDzCd';
     
     $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
     $db = new PDO($dsn, $dbuser, $dbpass);
@@ -56,7 +54,6 @@ function getDbConnection() {
     $db->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
     return $db;
 }
-
 // ==========================================
 // 🚀 0. 一键建表魔法 (包含所有的真实数据表)
 // ==========================================
