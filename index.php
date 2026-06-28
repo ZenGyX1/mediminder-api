@@ -2,18 +2,17 @@
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Factory\AppFactory;
-// === 跨域 (CORS) 万能通行证 ===
+// === 跨域 (CORS) 绝对放行版 ===
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
-header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Access-Control-Allow-Headers: *");
 
-// 处理浏览器的 OPTIONS 预检请求
+// 重点：处理浏览器最关心的 OPTIONS 请求
 if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     http_response_code(200);
     exit();
 }
 // ==================================
-
 // 1. 自动加载 Slim 4 框架环境
 require __DIR__ . '/vendor/autoload.php';
 
