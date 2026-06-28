@@ -63,7 +63,8 @@ $app->post('/api/register', function (Request $request, Response $response) {
     $dbname = 'mediminder_db';
 
     try {
-        $db = new PDO("mysql:host=$dbhost;dbname=$dbname;charset=utf8mb4", $dbuser, $dbpass);
+        // 重点：在 host 前面加上 tcp:
+$db = new PDO("mysql:host=tcp:$dbhost;port=$dbport;dbname=$dbname;charset=utf8mb4", $dbuser, $dbpass);
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         $password_hash = password_hash($password, PASSWORD_BCRYPT);
@@ -110,11 +111,15 @@ $app->post('/api/login', function (Request $request, Response $response) {
         return $response->withStatus(400);
     }
 
-    $dbhost = 'localhost';
-    $dbuser = 'root';
-    $dbpass = '';
-    $dbname = 'mediminder_db';
+    // 确保变量读取正确
+$dbhost = getenv('MYSQLHOST');
+$dbport = getenv('MYSQLPORT');
+$dbname = "railway"; 
+$dbuser = getenv('MYSQLUSER');
+$dbpass = getenv('MYSQLPASSWORD');
 
+// 关键修复：使用 127.0.0.1 强制走 TCP/IP 网络协议，而不是 Socket
+$dsn = "mysql:host=127.0.0.1;port=$dbport;dbname=$dbname;charset=utf8mb4";
     try {
         $db = new PDO("mysql:host=$dbhost;dbname=$dbname;charset=utf8mb4", $dbuser, $dbpass);
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
