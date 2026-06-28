@@ -49,7 +49,7 @@ function getDbConnection() {
     $port = '44083';
     $dbname = 'railway'; 
     $dbuser = 'root';
-    $dbpass = 'xRSkNnnKkCvEjTdkebTrkTgLZDUlDzCd';
+    $dbpass = 'xRSKnNnkKCvEjTdkebTrkTgLZDUlDzCd';
     
     // 强制走 TCP/IP 网络请求
     $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
@@ -221,5 +221,34 @@ $app->post('/api/medications/add', function (Request $request, Response $respons
     $response->getBody()->write($payload);
     return $response->withStatus(200);
 });
-
+// ==========================================
+// 🚀 终极魔法：一键初始化云端数据库表 
+// ==========================================
+$app->get('/api/setup-db', function ($request, $response) {
+    try {
+        $db = getDbConnection();
+        // 自动创建 users 表
+        $db->exec("CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100),
+            email VARCHAR(255) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            role VARCHAR(50) DEFAULT 'patient',
+            dob DATE
+        )");
+        // 自动创建 dose_logs 表
+        $db->exec("CREATE TABLE IF NOT EXISTS dose_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT,
+            medication_id INT,
+            status VARCHAR(50) DEFAULT 'scheduled',
+            taken_at DATETIME NULL
+        )");
+        $response->getBody()->write(json_encode(["status" => "success", "message" => "太棒了！云端数据库表已全部自动创建成功！"]));
+        return $response->withStatus(200);
+    } catch (PDOException $e) {
+        $response->getBody()->write(json_encode(["status" => "error", "message" => "建表失败: " . $e->getMessage()]));
+        return $response->withStatus(500);
+    }
+});
 $app->run();
