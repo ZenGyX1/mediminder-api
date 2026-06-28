@@ -40,17 +40,23 @@ $app->add(function ($request, $handler) {
 // =========================================================================
 // 【核心数据库连接配置】抽离出来，确保所有接口都用最正确的姿势连云端数据库
 // =========================================================================
+// =========================================================================
+// 【核心数据库连接配置】直接使用真实公网地址，彻底粉碎环境变量读取失败的问题
+// =========================================================================
 function getDbConnection() {
-    $port = getenv('MYSQLPORT') ?: '3306';
-    $dbname = getenv('MYSQLDATABASE') ?: 'railway'; 
-    $dbuser = getenv('MYSQLUSER') ?: 'root';
-    $dbpass = getenv('MYSQLPASSWORD') ?: '';
+    // 强制写死你的 Railway 公网数据库真实信息！
+    $host = 'junction.proxy.rlwy.net';
+    $port = '44083';
+    $dbname = 'railway'; 
+    $dbuser = 'root';
+    $dbpass = 'xRSkNnnKkCvEjTdkebTrkTgLZDUlDzCd';
     
-    // 关键修复：强制使用 127.0.0.1 走 TCP/IP，彻底消灭 Socket 报错！
-    $dsn = "mysql:host=127.0.0.1;port=$port;dbname=$dbname;charset=utf8mb4";
+    // 强制走 TCP/IP 网络请求
+    $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
     $db = new PDO($dsn, $dbuser, $dbpass);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $db->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+    
     return $db;
 }
 
