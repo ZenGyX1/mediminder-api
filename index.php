@@ -142,10 +142,14 @@ $app->post('/api/login', function (Request $request, Response $response) {
 });
 // 5. 【获取今日吃药日程】：合并 UI 数据与真实的数据库状态
 $app->get('/api/doses', function (Request $request, Response $response) {
-    $dbhost = 'localhost'; $dbuser = 'root'; $dbpass = ''; $dbname = 'mediminder_db';
-    
+   $dbhost = getenv('MYSQLHOST') ?: 'localhost';
+    $dbport = getenv('MYSQLPORT') ?: '3306';
+    $dbuser = getenv('MYSQLUSER') ?: 'root';
+    $dbpass = getenv('MYSQLPASSWORD') ?: '';
+    $dbname = 'mediminder_db';
+
     try {
-        $db = new PDO("mysql:host=$dbhost;dbname=$dbname;charset=utf8mb4", $dbuser, $dbpass);
+        $db = new PDO("mysql:host=$dbhost;port=$dbport;dbname=$dbname;charset=utf8mb4", $dbuser, $dbpass);
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // 去真实的 dose_logs 表里查询今天的吃药状态
@@ -198,10 +202,14 @@ $app->post('/api/doses/mark', function (Request $request, Response $response) {
         return $response->withStatus(400);
     }
 
-    $dbhost = 'localhost'; $dbuser = 'root'; $dbpass = ''; $dbname = 'mediminder_db';
+    $dbhost = getenv('MYSQLHOST') ?: 'localhost';
+    $dbport = getenv('MYSQLPORT') ?: '3306';
+    $dbuser = getenv('MYSQLUSER') ?: 'root';
+    $dbpass = getenv('MYSQLPASSWORD') ?: '';
+    $dbname = 'mediminder_db';
 
     try {
-        $db = new PDO("mysql:host=$dbhost;dbname=$dbname;charset=utf8mb4", $dbuser, $dbpass);
+        $db = new PDO("mysql:host=$dbhost;port=$dbport;dbname=$dbname;charset=utf8mb4", $dbuser, $dbpass);
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         // 如果是 taken，就记录当前真实时间，否则清空时间
