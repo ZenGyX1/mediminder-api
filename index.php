@@ -134,7 +134,7 @@ $app->post('/api/medications/add', function (Request $request, Response $respons
         
         $newMedId = $db->lastInsertId();
         // 添加药后自动给它创建一条未打卡的记录
-        $db->exec("INSERT INTO dose_logs (med_id, status) VALUES ($newMedId, 'scheduled')");
+        $db->exec("INSERT INTO dose_logs (medication_id, status) VALUES ($newMedId, 'scheduled')");
         
         $response->getBody()->write(json_encode(["status" => "success"]));
         return $response->withStatus(200);
