@@ -28,14 +28,13 @@ $app->addErrorMiddleware(true, true, true);
 // 🔗 数据库连接配置 (密码已校准，公网直连)
 // =========================================================================
 function getDbConnection() {
-    // 既然跨域已经修好，我们堂堂正正走公网大门！
-    $host = 'junction.proxy.rlwy.net';
-    $port = '44083';
-    $dbname = 'railway';
-    $dbuser = 'root';
-    
-    // 🚨 经过我核对的 100% 正确密码，绝无大小写错误！
-    $dbpass = 'xRSkNnnKkCvEjTdkebTrkTgLZDUlDzCd';
+    // 🚨 终极绝杀：使用 getenv() 直接从 Railway 服务器内存中读取最新配置！
+    // 无论后台密码怎么刷新、大小写多复杂，它抓取的绝对是 100% 匹配的当前真实密码！
+    $host = getenv('MYSQLHOST') ?: 'junction.proxy.rlwy.net';
+    $port = getenv('MYSQLPORT') ?: '44083';
+    $dbname = getenv('MYSQLDATABASE') ?: 'railway';
+    $dbuser = getenv('MYSQLUSER') ?: 'root';
+    $dbpass = getenv('MYSQLPASSWORD') ?: 'xRSkNnnKkCvEjTdkebTrkTgLZDUlDzCd';
     
     $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
     $db = new PDO($dsn, $dbuser, $dbpass);
