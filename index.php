@@ -3,252 +3,208 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Factory\AppFactory;
 
-// === 跨域 (CORS) 绝对放行版 ===
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: *");
-
-if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
-    http_response_code(200);
-    exit();
+// =========================================================================
+// 🚨 终极 CORS 防线：拦截 OPTIONS 请求，直接阻断 500 报错！
+// =========================================================================
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    header("Access-Control-Allow-Origin: *");
+    header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+    header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+    http_response_code(200);
+    exit();
 }
-// ==================================
 
-// 1. 自动加载 Slim 4 框架环境
+header("Access-Control-Allow-Origin: *");
+header("Content-Type: application/json; charset=utf-8");
+
 require __DIR__ . '/vendor/autoload.php';
-
 $app = AppFactory::create();
 
-// 2. CORS 中间件，完美拦截并响应浏览器的 OPTIONS 预检请求
-$app->add(function ($request, $handler) {
-    if ($request->getMethod() === 'OPTIONS') {
-        $response = new \Slim\Psr7\Response();
-        return $response
-            ->withHeader('Access-Control-Allow-Origin', '*')
-            ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-            ->withHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Accept, Origin, Authorization')
-            ->withStatus(200);
-    }
-    $response = $handler->handle($request);
-    return $response
-        ->withHeader('Content-Type', 'application/json; charset=utf-8')
-        ->withHeader('Access-Control-Allow-Origin', '*')
-        ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-        ->withHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Accept, Origin, Authorization');
-});
+// 添加 Slim 内部的错误中间件（方便在后台看报错排雷）
+$app->addRoutingMiddleware();
+$app->addErrorMiddleware(true, true, true);
 
 // =========================================================================
-// 【核心数据库连接配置】抽离出来，确保所有接口都用最正确的姿势连云端数据库
-// =========================================================================
-// =========================================================================
-// 【核心数据库连接配置】直接使用真实公网地址，彻底粉碎环境变量读取失败的问题
+// 🔗 数据库连接配置 (密码已校准，公网直连)
 // =========================================================================
 function getDbConnection() {
-    // 强制写死你的 Railway 公网数据库真实信息！
-    $host = 'junction.proxy.rlwy.net';
-    $port = '44083';
-    $dbname = 'railway'; 
-    $dbuser = 'root';
-    $dbpass = 'xRSKnNnkKCvEjTdkebTrkTgLZDUlDzCd';
-    
-    // 强制走 TCP/IP 网络请求
-    $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
-    $db = new PDO($dsn, $dbuser, $dbpass);
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $db->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
-    
-    return $db;
+    $host = 'junction.proxy.rlwy.net';
+    $port = '44083';
+    $dbname = 'railway';
+    $dbuser = 'root';
+    $dbpass = 'xRSkNnnKkCvEjTdkebTrkTgLZDUlDzCd';
+    $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
+    $db = new PDO($dsn, $dbuser, $dbpass);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    return $db;
 }
 
-// 3. 【正式注册接口】
-$app->post('/api/register', function (Request $request, Response $response) {
-    $input = json_decode($request->getBody(), true);
-    $name = $input['name'] ?? '';
-    $email = $input['email'] ?? '';
-    $password = $input['password'] ?? '';
-    $role = $input['role'] ?? 'patient'; 
-    $dob = $input['dob'] ?? null;        
-
-    if (empty($name) || empty($email) || empty($password)) {
-        $response->getBody()->write(json_encode(["status" => "error", "message" => "必填项不能为空"], JSON_UNESCAPED_UNICODE));
-        return $response->withStatus(400);
-    }
-
-    try {
-        $db = getDbConnection(); // 使用统一修复的连接
-        $password_hash = password_hash($password, PASSWORD_BCRYPT);
-        $sql = "INSERT INTO users (name, email, password_hash, role, dob) VALUES (:name, :email, :password_hash, :role, :dob)";
-        $stmt = $db->prepare($sql);
-        $stmt->bindParam(':name', $name);
-        $stmt->bindParam(':email', $email);
-        $stmt->bindParam(':password_hash', $password_hash);
-        $stmt->bindParam(':role', $role);
-        $stmt->bindParam(':dob', $dob);
-        $stmt->execute();
-        $newUserId = $db->lastInsertId();
-
-        $payload = json_encode([
-            "status" => "success",
-            "message" => "User registered in DB successfully!",
-            "data" => ["user_id" => $newUserId, "name" => $name, "email" => $email]
-        ], JSON_UNESCAPED_UNICODE);
-        $response->getBody()->write($payload);
-        return $response->withStatus(201);
-    } catch (PDOException $e) {
-        $response->getBody()->write(json_encode(["status" => "error", "message" => "数据库错误: " . $e->getMessage()], JSON_UNESCAPED_UNICODE));
-        return $response->withStatus(500);
-    }
+// =========================================================================
+// ⚙️ 0. 一键初始化建表 (访问 /api/setup-db 触发)
+// =========================================================================
+$app->get('/api/setup-db', function (Request $request, Response $response) {
+    try {
+        $db = getDbConnection();
+        $db->exec("CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100), email VARCHAR(255) UNIQUE NOT NULL, password_hash VARCHAR(255) NOT NULL, role VARCHAR(50) DEFAULT 'patient')");
+        $db->exec("CREATE TABLE IF NOT EXISTS medications (id INT AUTO_INCREMENT PRIMARY KEY, time VARCHAR(50), medName VARCHAR(100), dose VARCHAR(50), color VARCHAR(50) DEFAULT 'blue')");
+        $db->exec("CREATE TABLE IF NOT EXISTS dose_logs (id INT AUTO_INCREMENT PRIMARY KEY, med_id INT, status VARCHAR(50) DEFAULT 'scheduled', taken_at DATETIME NULL)");
+        $response->getBody()->write(json_encode(["status" => "success", "message" => "所有表已就绪！"]));
+        return $response->withStatus(200);
+    } catch (PDOException $e) {
+        $response->getBody()->write(json_encode(["status" => "error", "message" => $e->getMessage()]));
+        return $response->withStatus(500);
+    }
 });
 
-// 4. 【正式登录接口】
+// =========================================================================
+// 👤 1. 账号系统模块
+// =========================================================================
+// [登录]
 $app->post('/api/login', function (Request $request, Response $response) {
-    $input = json_decode($request->getBody(), true);
-    $email = $input['email'] ?? '';
-    $password = $input['password'] ?? '';
-
-    if (empty($email) || empty($password)) {
-        $response->getBody()->write(json_encode(["status" => "error", "message" => "邮箱和密码不能为空"], JSON_UNESCAPED_UNICODE));
-        return $response->withStatus(400);
-    }
-
-    try {
-        $db = getDbConnection(); // 使用统一修复的连接
-        $stmt = $db->prepare("SELECT * FROM users WHERE email = :email");
-        $stmt->bindParam(':email', $email);
-        $stmt->execute();
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($user && password_verify($password, $user['password_hash'])) {
-            $payload = json_encode([
-                "status" => "success",
-                "message" => "Login verified by DB!",
-                "role" => $user['role'],
-                "data" => [
-                    "token" => "generated_session_token_example",
-                    "user" => [
-                        "id" => $user['id'],
-                        "name" => $user['name'],
-                        "email" => $user['email'],
-                        "role" => $user['role']
-                    ]
-                ]
-            ], JSON_UNESCAPED_UNICODE);
-            $response->getBody()->write($payload);
-            return $response->withStatus(200);
-        } else {
-            $response->getBody()->write(json_encode(["status" => "error", "message" => "邮箱或密码错误"], JSON_UNESCAPED_UNICODE));
-            return $response->withStatus(401);
-        }
-    } catch (PDOException $e) {
-        $response->getBody()->write(json_encode(["status" => "error", "message" => "数据库错误: " . $e->getMessage()], JSON_UNESCAPED_UNICODE));
-        return $response->withStatus(500);
-    }
+    try {
+        $input = json_decode($request->getBody(), true);
+        $db = getDbConnection();
+        $stmt = $db->prepare("SELECT * FROM users WHERE email = :email");
+        $stmt->execute([':email' => $input['email'] ?? '']);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($user && password_verify($input['password'] ?? '', $user['password_hash'])) {
+            $response->getBody()->write(json_encode(["status" => "success", "role" => $user['role']]));
+            return $response->withStatus(200);
+        }
+        $response->getBody()->write(json_encode(["status" => "error", "message" => "邮箱或密码错误"]));
+        return $response->withStatus(401);
+    } catch (PDOException $e) {
+        $response->getBody()->write(json_encode(["status" => "error", "message" => $e->getMessage()]));
+        return $response->withStatus(500);
+    }
 });
 
-// 5. 【获取今日吃药日程】
-$app->get('/api/doses', function (Request $request, Response $response) {
-    try {
-        $db = getDbConnection(); // 使用统一修复的连接
-        $stmt = $db->query("SELECT id, status, DATE_FORMAT(taken_at, '%h:%i %p') as takenAt FROM dose_logs");
-        $realLogs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $statusMap = [];
-        foreach ($realLogs as $log) {
-            $statusMap[$log['id']] = $log;
-        }
-
-        $schedule = [
-            ["id" => 1, "time" => "7:00 AM", "medName" => "Panadol", "dose" => "500mg", "color" => "teal"],
-            ["id" => 2, "time" => "8:00 AM", "medName" => "Amlodipine", "dose" => "5mg", "color" => "blue"],
-            ["id" => 3, "time" => "12:00 PM", "medName" => "Lisinopril", "dose" => "10mg", "color" => "amber"],
-            ["id" => 4, "time" => "9:00 PM", "medName" => "Atorvastatin", "dose" => "20mg", "color" => "red"]
-        ];
-
-        foreach ($schedule as &$dose) {
-            if (isset($statusMap[$dose['id']])) {
-                $dbStatus = $statusMap[$dose['id']]['status'];
-                $dose['status'] = ($dbStatus === 'scheduled') ? 'upcoming' : $dbStatus;
-                $dose['takenAt'] = $statusMap[$dose['id']]['takenAt'];
-            } else {
-                $dose['status'] = 'upcoming';
-            }
-        }
-        $response->getBody()->write(json_encode(["status" => "success", "data" => $schedule], JSON_UNESCAPED_UNICODE));
-        return $response->withStatus(200);
-    } catch (PDOException $e) {
-        $response->getBody()->write(json_encode(["status" => "error", "message" => $e->getMessage()]));
-        return $response->withStatus(500);
-    }
+// [注册]
+$app->post('/api/register', function (Request $request, Response $response) {
+    try {
+        $input = json_decode($request->getBody(), true);
+        $db = getDbConnection();
+        $stmt = $db->prepare("INSERT INTO users (name, email, password_hash, role) VALUES (:name, :email, :hash, :role)");
+        $stmt->execute([
+            ':name' => $input['name'] ?? 'User', 
+            ':email' => $input['email'], 
+            ':hash' => password_hash($input['password'], PASSWORD_BCRYPT), 
+            ':role' => 'patient'
+        ]);
+        $response->getBody()->write(json_encode(["status" => "success"]));
+        return $response->withStatus(201);
+    } catch (PDOException $e) {
+        $response->getBody()->write(json_encode(["status" => "error", "message" => "注册失败，可能是邮箱已存在"]));
+        return $response->withStatus(500);
+    }
 });
 
-// 6. 【处理吃药打卡】
-$app->post('/api/doses/mark', function (Request $request, Response $response) {
-    $input = json_decode($request->getBody(), true);
-    $id = $input['id'] ?? null;
-    $status = $input['status'] ?? null;
-
-    if (!$id || !$status) {
-        $response->getBody()->write(json_encode(["status" => "error", "message" => "缺少必要参数"]));
-        return $response->withStatus(400);
-    }
-
-    try {
-        $db = getDbConnection(); // 使用统一修复的连接
-        $taken_at = ($status === 'taken') ? date('Y-m-d H:i:s') : null;
-        $sql = "UPDATE dose_logs SET status = :status, taken_at = :taken_at WHERE id = :id";
-        $stmt = $db->prepare($sql);
-        $stmt->bindParam(':status', $status);
-        $stmt->bindParam(':taken_at', $taken_at);
-        $stmt->bindParam(':id', $id);
-        $stmt->execute();
-
-        $response->getBody()->write(json_encode(["status" => "success", "message" => "数据库更新成功！"]));
-        return $response->withStatus(200);
-    } catch (PDOException $e) {
-        $response->getBody()->write(json_encode(["status" => "error", "message" => $e->getMessage()]));
-        return $response->withStatus(500);
-    }
+// =========================================================================
+// 💊 2. 药物管理模块
+// =========================================================================
+// [获取列表]
+$app->get('/api/medications', function (Request $request, Response $response) {
+    try {
+        $db = getDbConnection();
+        $meds = $db->query("SELECT * FROM medications")->fetchAll(PDO::FETCH_ASSOC);
+        $response->getBody()->write(json_encode(["status" => "success", "data" => $meds]));
+        return $response->withStatus(200);
+    } catch (PDOException $e) {
+        $response->getBody()->write(json_encode(["status" => "error", "message" => $e->getMessage()]));
+        return $response->withStatus(500);
+    }
 });
 
-// 7. 【处理添加药物】
+// [添加药物]
 $app->post('/api/medications/add', function (Request $request, Response $response) {
-    $input = json_decode($request->getBody(), true);
-    $payload = json_encode([
-        "status" => "success",
-        "message" => "Medication added successfully for Demo!",
-        "data" => $input
-    ], JSON_UNESCAPED_UNICODE);
-    $response->getBody()->write($payload);
-    return $response->withStatus(200);
+    try {
+        $input = json_decode($request->getBody(), true);
+        $db = getDbConnection();
+        $stmt = $db->prepare("INSERT INTO medications (time, medName, dose, color) VALUES (:t, :n, :d, :c)");
+        $stmt->execute([
+            ':t' => $input['time'] ?? '08:00 AM', 
+            ':n' => $input['medName'], 
+            ':d' => $input['dose'] ?? '', 
+            ':c' => $input['color'] ?? 'blue'
+        ]);
+        
+        $newMedId = $db->lastInsertId();
+        // 添加药后自动给它创建一条未打卡的记录
+        $db->exec("INSERT INTO dose_logs (med_id, status) VALUES ($newMedId, 'scheduled')");
+        
+        $response->getBody()->write(json_encode(["status" => "success"]));
+        return $response->withStatus(200);
+    } catch (PDOException $e) {
+        $response->getBody()->write(json_encode(["status" => "error", "message" => $e->getMessage()]));
+        return $response->withStatus(500);
+    }
 });
-// ==========================================
-// 🚀 终极魔法：一键初始化云端数据库表 
-// ==========================================
-$app->get('/api/setup-db', function ($request, $response) {
-    try {
-        $db = getDbConnection();
-        // 自动创建 users 表
-        $db->exec("CREATE TABLE IF NOT EXISTS users (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(100),
-            email VARCHAR(255) UNIQUE NOT NULL,
-            password_hash VARCHAR(255) NOT NULL,
-            role VARCHAR(50) DEFAULT 'patient',
-            dob DATE
-        )");
-        // 自动创建 dose_logs 表
-        $db->exec("CREATE TABLE IF NOT EXISTS dose_logs (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT,
-            medication_id INT,
-            status VARCHAR(50) DEFAULT 'scheduled',
-            taken_at DATETIME NULL
-        )");
-        $response->getBody()->write(json_encode(["status" => "success", "message" => "太棒了！云端数据库表已全部自动创建成功！"]));
-        return $response->withStatus(200);
-    } catch (PDOException $e) {
-        $response->getBody()->write(json_encode(["status" => "error", "message" => "建表失败: " . $e->getMessage()]));
-        return $response->withStatus(500);
-    }
+
+// [删除药物]
+$app->post('/api/medications/delete', function (Request $request, Response $response) {
+    try {
+        $input = json_decode($request->getBody(), true);
+        $db = getDbConnection();
+        $stmt = $db->prepare("DELETE FROM medications WHERE id = :id");
+        $stmt->execute([':id' => $input['id']]);
+        
+        // 斩草除根，连同打卡记录一起删
+        $stmtLog = $db->prepare("DELETE FROM dose_logs WHERE med_id = :id");
+        $stmtLog->execute([':id' => $input['id']]);
+
+        $response->getBody()->write(json_encode(["status" => "success"]));
+        return $response->withStatus(200);
+    } catch (PDOException $e) {
+        $response->getBody()->write(json_encode(["status" => "error", "message" => $e->getMessage()]));
+        return $response->withStatus(500);
+    }
 });
+
+// =========================================================================
+// ⏰ 3. 打卡日程模块
+// =========================================================================
+// [获取今日吃药日程]
+$app->get('/api/doses', function (Request $request, Response $response) {
+    try {
+        $db = getDbConnection();
+        $sql = "SELECT m.id, m.time, m.medName, m.dose, m.color, d.status, DATE_FORMAT(d.taken_at, '%h:%i %p') as takenAt 
+                FROM medications m 
+                LEFT JOIN dose_logs d ON m.id = d.med_id";
+        $schedule = $db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($schedule as &$dose) {
+            $dose['status'] = ($dose['status'] === 'scheduled' || !$dose['status']) ? 'upcoming' : $dose['status'];
+        }
+
+        $response->getBody()->write(json_encode(["status" => "success", "data" => $schedule]));
+        return $response->withStatus(200);
+    } catch (PDOException $e) {
+        $response->getBody()->write(json_encode(["status" => "error", "message" => $e->getMessage()]));
+        return $response->withStatus(500);
+    }
+});
+
+// [点击打卡 / 取消打卡]
+$app->post('/api/doses/mark', function (Request $request, Response $response) {
+    try {
+        $input = json_decode($request->getBody(), true);
+        $db = getDbConnection();
+        $taken_at = ($input['status'] === 'taken') ? date('Y-m-d H:i:s') : null;
+        
+        $stmt = $db->prepare("UPDATE dose_logs SET status = :status, taken_at = :taken_at WHERE med_id = :id");
+        $stmt->execute([
+            ':status' => $input['status'], 
+            ':taken_at' => $taken_at, 
+            ':id' => $input['id']
+        ]);
+
+        $response->getBody()->write(json_encode(["status" => "success"]));
+        return $response->withStatus(200);
+    } catch (PDOException $e) {
+        $response->getBody()->write(json_encode(["status" => "error", "message" => $e->getMessage()]));
+        return $response->withStatus(500);
+    }
+});
+
 $app->run();
