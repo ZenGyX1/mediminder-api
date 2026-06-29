@@ -50,7 +50,7 @@ $app->get('/api/setup-db', function (Request $request, Response $response) {
         $db = getDbConnection();
         $db->exec("CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100), email VARCHAR(255) UNIQUE NOT NULL, password_hash VARCHAR(255) NOT NULL, role VARCHAR(50) DEFAULT 'patient')");
         $db->exec("CREATE TABLE IF NOT EXISTS medications (id INT AUTO_INCREMENT PRIMARY KEY, time VARCHAR(50), medName VARCHAR(100), dose VARCHAR(50), color VARCHAR(50) DEFAULT 'blue')");
-        $db->exec("CREATE TABLE IF NOT EXISTS dose_logs (id INT AUTO_INCREMENT PRIMARY KEY, med_id INT, status VARCHAR(50) DEFAULT 'scheduled', taken_at DATETIME NULL)");
+        $db->exec("CREATE TABLE IF NOT EXISTS dose_logs (id INT AUTO_INCREMENT PRIMARY KEY, medication_id INT, status VARCHAR(50) DEFAULT 'scheduled', taken_at DATETIME NULL)");
         $response->getBody()->write(json_encode(["status" => "success", "message" => "所有表已就绪！"]));
         return $response->withStatus(200);
     } catch (PDOException $e) {
@@ -153,7 +153,7 @@ $app->post('/api/medications/delete', function (Request $request, Response $resp
         $stmt->execute([':id' => $input['id']]);
         
         // 斩草除根，连同打卡记录一起删
-        $stmtLog = $db->prepare("DELETE FROM dose_logs WHERE med_id = :id");
+        $stmtLog = $db->prepare("DELETE FROM dose_logs WHERE medication_id = :id");
         $stmtLog->execute([':id' => $input['id']]);
 
         $response->getBody()->write(json_encode(["status" => "success"]));
@@ -173,7 +173,7 @@ $app->get('/api/doses', function (Request $request, Response $response) {
         $db = getDbConnection();
         $sql = "SELECT m.id, m.time, m.medName, m.dose, m.color, d.status, DATE_FORMAT(d.taken_at, '%h:%i %p') as takenAt 
                 FROM medications m 
-                LEFT JOIN dose_logs d ON m.id = d.med_id";
+                LEFT JOIN dose_logs d ON m.id = d.medication_id";
         $schedule = $db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($schedule as &$dose) {
@@ -195,7 +195,7 @@ $app->post('/api/doses/mark', function (Request $request, Response $response) {
         $db = getDbConnection();
         $taken_at = ($input['status'] === 'taken') ? date('Y-m-d H:i:s') : null;
         
-        $stmt = $db->prepare("UPDATE dose_logs SET status = :status, taken_at = :taken_at WHERE med_id = :id");
+        $stmt = $db->prepare("UPDATE dose_logs SET status = :status, taken_at = :taken_at WHERE medication_id = :id");
         $stmt->execute([
             ':status' => $input['status'], 
             ':taken_at' => $taken_at, 
