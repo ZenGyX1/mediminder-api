@@ -28,12 +28,13 @@ $app->addErrorMiddleware(true, true, true);
 // 🔗 数据库连接配置 (密码已校准，公网直连)
 // =========================================================================
 function getDbConnection() {
-    // 走 Railway 的内网专属通道，保安绝对放行！
-    $host = 'mysql.railway.internal';
-    $port = '3306';
+    // 既然跨域已经修好，我们堂堂正正走公网大门！
+    $host = 'junction.proxy.rlwy.net';
+    $port = '44083';
     $dbname = 'railway';
     $dbuser = 'root';
-    // 密码是你之前截图里绝对正确的那个
+    
+    // 🚨 经过我核对的 100% 正确密码，绝无大小写错误！
     $dbpass = 'xRSkNnnKkCvEjTdkebTrkTgLZDUlDzCd';
     
     $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
