@@ -28,11 +28,14 @@ $app->addErrorMiddleware(true, true, true);
 // 🔗 数据库连接配置 (密码已校准，公网直连)
 // =========================================================================
 function getDbConnection() {
-    $host = 'junction.proxy.rlwy.net';
-    $port = '44083';
+    // 走 Railway 的内网专属通道，保安绝对放行！
+    $host = 'mysql.railway.internal';
+    $port = '3306';
     $dbname = 'railway';
     $dbuser = 'root';
+    // 密码是你之前截图里绝对正确的那个
     $dbpass = 'xRSkNnnKkCvEjTdkebTrkTgLZDUlDzCd';
+    
     $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
     $db = new PDO($dsn, $dbuser, $dbpass);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
